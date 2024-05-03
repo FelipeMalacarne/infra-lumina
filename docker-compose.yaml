@@ -33,27 +33,6 @@ services:
     networks:
       - laravel_enviroment
 
-  artisan:
-    build:
-      context: dockerfiles
-      dockerfile: php.dockerfile
-    volumes:
-      - ./src:/var/www/html
-    entrypoint: ["php", "/var/www/html/artisan"]
-    networks:
-      - laravel_enviroment
-
-  composer:
-    build:
-      context: dockerfiles
-      dockerfile: composer.dockerfile
-    volumes:
-      - ../back-lumina:/var/www/html
-    depends_on:
-      - php
-    networks:
-      - laravel_enviroment
-
   postgres:
     image: "postgres:16"
     ports:
@@ -81,6 +60,27 @@ services:
       - laravel_enviroment
     command: redis-server --appendonly yes --replica-read-only no
 
+  mailpit:
+    image: "axllent/mailpit:latest"
+    ports:
+      - "${FORWARD_MAILPIT_PORT:-1025}:1025"
+      - "${FORWARD_MAILPIT_DASHBOARD_PORT:-8025}:8025"
+    networks:
+      - laravel_enviroment
+
+  mongodb:
+    image: mongo:latest
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_DATABASE: "${MONGO_DATABASE}"
+      MONGO_INITDB_ROOT_USERNAME: "${MONGO_USERNAME}"
+      MONGO_INITDB_ROOT_PASSWORD: "${MONGO_PASSWORD}"
+    volumes:
+      - ./db-data/mongo/:/data/db
+    networks:
+      - laravel_enviroment
+
   scheduler:
     build:
       context: dockerfiles
@@ -93,22 +93,37 @@ services:
     networks:
       - laravel_enviroment
 
-  mailpit:
-    image: "axllent/mailpit:latest"
-    ports:
-      - "${FORWARD_MAILPIT_PORT:-1025}:1025"
-      - "${FORWARD_MAILPIT_DASHBOARD_PORT:-8025}:8025"
-    networks:
-      - laravel_enviroment
-
   migrations:
     build:
-      dockerfile: ./php.Dockerfile
+      context: dockerfiles
+      dockerfile: php.dockerfile
     depends_on:
       postgres:
         condition: service_healthy
     entrypoint: ["php", "artisan", "migrate"]
+    networks:
+      - laravel_enviroment
 
+  artisan:
+    build:
+      context: dockerfiles
+      dockerfile: php.dockerfile
+    volumes:
+      - ./src:/var/www/html
+    entrypoint: ["php", "/var/www/html/artisan"]
+    networks:
+      - laravel_enviroment
+
+  composer:
+    build:
+      context: dockerfiles
+      dockerfile: composer.dockerfile
+    volumes:
+      - ../back-lumina:/var/www/html
+    depends_on:
+      - php
+    networks:
+      - laravel_enviroment
   # php:
   #   build:
   #     dockerfile: ./back.Dockerfile
