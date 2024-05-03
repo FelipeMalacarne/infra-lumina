@@ -1,3 +1,8 @@
+version: "3.9"
+
+networks:
+  laravel_enviroment:
+
 services:
   server:
     build:
@@ -25,6 +30,16 @@ services:
     volumes:
       - ../back-lumina/:/var/www/html:delegated
     container_name: php_laravel_enviroment
+    networks:
+      - laravel_enviroment
+
+  artisan:
+    build:
+      context: dockerfiles
+      dockerfile: php.dockerfile
+    volumes:
+      - ./src:/var/www/html
+    entrypoint: ["php", "/var/www/html/artisan"]
     networks:
       - laravel_enviroment
 
@@ -66,21 +81,34 @@ services:
       - laravel_enviroment
     command: redis-server --appendonly yes --replica-read-only no
 
-  # ############################################################################
+  scheduler:
+    build:
+      context: dockerfiles
+      dockerfile: php.dockerfile
+    container_name: scheduler_laravel_enviroment
+    volumes:
+      - ../back-lumina:/var/www/html
+    working_dir: /var/www/html
+    entrypoint: ["php", "artisan", "schedule:work"]
+    networks:
+      - laravel_enviroment
 
-  # composer:
-  #   build:
-  #     dockerfile: ./back.Dockerfile
-  #   entrypoint: ["composer", "install"]
-  #
-  # migrations:
-  #   build:
-  #     dockerfile: ./back.Dockerfile
-  #   depends_on:
-  #     postgres:
-  #       condition: service_healthy
-  #   entrypoint: ["php", "artisan", "migrate"]
-  #
+  mailpit:
+    image: "axllent/mailpit:latest"
+    ports:
+      - "${FORWARD_MAILPIT_PORT:-1025}:1025"
+      - "${FORWARD_MAILPIT_DASHBOARD_PORT:-8025}:8025"
+    networks:
+      - laravel_enviroment
+
+  migrations:
+    build:
+      dockerfile: ./php.Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+    entrypoint: ["php", "artisan", "migrate"]
+
   # php:
   #   build:
   #     dockerfile: ./back.Dockerfile
