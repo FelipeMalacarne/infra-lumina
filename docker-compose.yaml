@@ -6,8 +6,8 @@ networks:
 services:
   server:
     build:
-      context: dockerfiles
-      dockerfile: nginx.dockerfile
+      context: ..
+      dockerfile: infra-lumina/dockerfiles/nginx.dockerfile
     ports:
       - 8000:80
     volumes:
@@ -19,17 +19,15 @@ services:
       - postgres
       - mailpit
       - mongodb
-    container_name: laravel_enviroment_server
     networks:
       - laravel_enviroment
 
   php:
     build:
-      context: dockerfiles
-      dockerfile: php.dockerfile
+      context: ..
+      dockerfile: infra-lumina/dockerfiles/php.dockerfile
     volumes:
       - ../back-lumina/:/var/www/html:delegated
-    container_name: php_laravel_enviroment
     networks:
       - laravel_enviroment
 
@@ -40,19 +38,15 @@ services:
     volumes:
       - "./db-data/postgres:/var/lib/postgresql/data"
     environment:
-      PGPASSWORD: "${DB_PASSWORD}"
-      POSTGRES_DB: "${DB_DATABASE}"
-      POSTGRES_USER: "${DB_USERNAME}"
-      POSTGRES_PASSWORD: "${DB_PASSWORD}"
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      PGPASSWORD: ${DB_PASSWORD:-password}
+      POSTGRES_DB: ${DB_DATABASE:-lumina}
+      POSTGRES_USER: ${DB_USERNAME:-admin}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-password}
+    networks:
+      - laravel_enviroment
 
   redis:
     image: redis:alpine
-    container_name: redis_laravel_enviroment
     restart: unless-stopped
     ports:
       - 6379:6379
@@ -73,9 +67,9 @@ services:
     ports:
       - "27017:27017"
     environment:
-      MONGO_INITDB_DATABASE: "${MONGO_DATABASE}"
-      MONGO_INITDB_ROOT_USERNAME: "${MONGO_USERNAME}"
-      MONGO_INITDB_ROOT_PASSWORD: "${MONGO_PASSWORD}"
+      MONGO_INITDB_DATABASE: ${MONGO_DATABASE}
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
     volumes:
       - ./db-data/mongo/:/data/db
     networks:
@@ -83,9 +77,8 @@ services:
 
   scheduler:
     build:
-      context: dockerfiles
-      dockerfile: php.dockerfile
-    container_name: scheduler_laravel_enviroment
+      context: ..
+      dockerfile: infra-lumina/dockerfiles/php.dockerfile
     volumes:
       - ../back-lumina:/var/www/html
     working_dir: /var/www/html
@@ -95,19 +88,18 @@ services:
 
   migrations:
     build:
-      context: dockerfiles
-      dockerfile: php.dockerfile
+      context: ..
+      dockerfile: infra-lumina/dockerfiles/php.dockerfile
     depends_on:
-      postgres:
-        condition: service_healthy
+      - postgres
     entrypoint: ["php", "artisan", "migrate"]
     networks:
       - laravel_enviroment
 
   artisan:
     build:
-      context: dockerfiles
-      dockerfile: php.dockerfile
+      context: ..
+      dockerfile: infra-lumina/dockerfiles/php.dockerfile
     volumes:
       - ./src:/var/www/html
     entrypoint: ["php", "/var/www/html/artisan"]
@@ -116,14 +108,15 @@ services:
 
   composer:
     build:
-      context: dockerfiles
-      dockerfile: composer.dockerfile
+      context: ..
+      dockerfile: infra-lumina/dockerfiles/composer.dockerfile
     volumes:
       - ../back-lumina:/var/www/html
     depends_on:
       - php
     networks:
       - laravel_enviroment
+
   # php:
   #   build:
   #     dockerfile: ./back.Dockerfile

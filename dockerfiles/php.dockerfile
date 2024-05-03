@@ -2,9 +2,9 @@ FROM php:8.3-fpm-alpine
 
 WORKDIR /var/www/html
 
-COPY src .
+COPY back-lumina/ .
 # Instalando extensões necessárias do PHP
-RUN apk add --no-cache postgresql-client-16 msmtp perl wget procps shadow libzip libpng libjpeg-turbo libwebp freetype icu
+RUN apk add --no-cache postgresql-client msmtp perl wget procps shadow libzip libpng libjpeg-turbo libwebp freetype icu postgresql-dev
 
 RUN apk add --no-cache --virtual build-essentials \
     icu-dev icu-libs zlib-dev g++ make automake autoconf libzip-dev \
