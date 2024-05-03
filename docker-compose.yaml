@@ -23,24 +23,33 @@ services:
       context: dockerfiles
       dockerfile: php.dockerfile
     volumes:
-      - ./src:/var/www/html:delegated
+      - ../back-lumina/:/var/www/html:delegated
     container_name: php_laravel_enviroment
     networks:
       - laravel_enviroment
 
-  # ############################################################################
+  composer:
+    build:
+      context: dockerfiles
+      dockerfile: composer.dockerfile
+    volumes:
+      - ../back-lumina:/var/www/html
+    depends_on:
+      - php
+    networks:
+      - laravel_enviroment
 
   postgres:
     image: "postgres:16"
     ports:
       - "5432:5432"
     volumes:
-      - "./infra/db-data/postgres:/var/lib/postgresql/data"
+      - "./db-data/postgres:/var/lib/postgresql/data"
     environment:
-      PGPASSWORD: "${DB_PASSWORD:-secret}"
+      PGPASSWORD: "${DB_PASSWORD}"
       POSTGRES_DB: "${DB_DATABASE}"
       POSTGRES_USER: "${DB_USERNAME}"
-      POSTGRES_PASSWORD: "${DB_PASSWORD:-secret}"
+      POSTGRES_PASSWORD: "${DB_PASSWORD}"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
