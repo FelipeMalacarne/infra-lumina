@@ -1,71 +1,93 @@
+version: "3.9"
+
+name: lumina
+
 services:
-
-  front:
-    image: node:16
-    working_dir: /var/www/html
-    build: 
-      dockerfile: ./front.Dockerfile
-
-  # ############################################################################
+  server:
+    build:
+      context: ..
+      dockerfile: infra-lumina/dockerfiles/nginx.dockerfile
+    ports:
+      - 8000:80
+    volumes:
+      - ../back-lumina:/var/www/html
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - php
+    restart: unless-stopped
 
   postgres:
-    image: 'postgres:15'
+    image: "postgres:16"
     ports:
-      - '5432:5432'
+      - "5432:5432"
     volumes:
-      - './infra/db-data/postgres:/var/lib/postgresql/data'
+      - "./db-data/postgres:/var/lib/postgresql/data"
     environment:
-      PGPASSWORD: '${DB_PASSWORD:-secret}'
-      POSTGRES_DB: '${DB_DATABASE}'
-      POSTGRES_USER: '${DB_USERNAME}'
-      POSTGRES_PASSWORD: '${DB_PASSWORD:-secret}'
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      PGPASSWORD: ${DB_PASSWORD:-password}
+      POSTGRES_DB: ${DB_DATABASE:-lumina}
+      POSTGRES_USER: ${DB_USERNAME:-admin}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-password}
 
-  # ############################################################################
+  redis:
+    image: redis:alpine
+    restart: unless-stopped
+    ports:
+      - 6379:6379
+    command: redis-server --appendonly yes --replica-read-only no
 
-  composer:
-    build:
-      dockerfile: ./back.Dockerfile
-    entrypoint: ['composer', 'install']
+  mailpit:
+    image: "axllent/mailpit:latest"
+    ports:
+      - "${FORWARD_MAILPIT_PORT:-1025}:1025"
+      - "${FORWARD_MAILPIT_DASHBOARD_PORT:-8025}:8025"
 
-  migrations:
-    build: 
-      dockerfile: ./back.Dockerfile
-    depends_on:
-      postgres:
-        condition: service_healthy
-    entrypoint: ['php', 'artisan', 'migrate']
+  mongodb:
+    image: mongo:latest
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_DATABASE: ${MONGO_DATABASE:-lumina}
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USERNAME:-admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-password}
+    volumes:
+      - ./db-data/mongo/:/data/db
 
   php:
     build:
-      dockerfile: ./back.Dockerfile
-    working_dir: /var/www/
-    env_file:
-      - ./back-lumina/.env
+      context: ..
+      dockerfile: infra-lumina/dockerfiles/php.dockerfile
     volumes:
-      - ./back-lumina:/var/www
-      # - ./infra/php.ini:/usr/local/etc/php/conf.d/zz-extra.ini
-      # - ./infra/php.conf:/usr/local/etc/php-fpm.d/zz-extra.conf
+      - ../back-lumina/:/var/www/html:delegated
+    working_dir: /var/www/html
     depends_on:
-      composer:
-        condition: service_completed_successfully
-      migrations:
-        condition: service_completed_successfully
+      - redis
+      - postgres
+      - mailpit
+      - mongodb
 
-  nginx:
-    image: nginx:alpine
-    depends_on:
-        php:
-            condition: service_started
-    ports:
-        - 8000:80
-    working_dir: /var/www
+  node:
+    build:
+      context: ..
+      dockerfile: infra-lumina/dockerfiles/node.dockerfile
+    working_dir: /app
     volumes:
-        - ./back-lumina:/var/www
-        - ./infra/nginx.conf:/etc/nginx/conf.d/default.conf
-    restart: unless-stopped
-  
+      - ../front-lumina/:/app
+    ports:
+      - 3000:3000
+    depends_on:
+      - server
+
+  scheduler:
+    extends: php
+    entrypoint: ["php", "artisan", "schedule:work"]
+
+  migrations:
+    extends: php
+    entrypoint: ["php", "artisan", "migrate"]
+
+  composer:
+    image: composer
+    working_dir: /var/www/html
+    volumes:
+      - ../back-lumina:/var/www/html
+    entrypoint: ["composer", "update"]
