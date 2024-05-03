@@ -56,6 +56,16 @@ services:
       timeout: 5s
       retries: 5
 
+  redis:
+    image: redis:alpine
+    container_name: redis_laravel_enviroment
+    restart: unless-stopped
+    ports:
+      - 6379:6379
+    networks:
+      - laravel_enviroment
+    command: redis-server --appendonly yes --replica-read-only no
+
   # ############################################################################
 
   # composer:
