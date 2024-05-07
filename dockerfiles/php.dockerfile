@@ -36,8 +36,3 @@ RUN rm -rf /var/cache/apk/*
 
 COPY --from=composer /usr/bin/composer /usr/bin/composer
 
-RUN addgroup -g 1000 laravel && adduser -G laravel -g laravel -s /bin/sh -D laravel
-
-RUN chown -R laravel /var/www/html
-
-USER laravel
