@@ -23,6 +23,8 @@ RUN apk add --no-cache pcre-dev $PHPIZE_DEPS \
     && pecl install redis \
     && docker-php-ext-enable redis.so
 
+COPY --from=composer /usr/bin/composer /usr/bin/composer
+
 RUN addgroup -g 1000 laravel && adduser -G laravel -g laravel -s /bin/sh -D laravel
 
 RUN chown -R laravel /var/www/html
