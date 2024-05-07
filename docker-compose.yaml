@@ -57,7 +57,7 @@ services:
       context: ..
       dockerfile: infra-lumina/dockerfiles/php.dockerfile
     volumes:
-      - ../back-lumina/:/var/www/html:delegated
+      - ../back-lumina/:/var/www/html
     working_dir: /var/www/html
     depends_on:
       - redis
