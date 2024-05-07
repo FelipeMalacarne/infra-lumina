@@ -4,24 +4,35 @@ WORKDIR /var/www/html
 
 COPY back-lumina/ .
 # Instalando extensões necessárias do PHP
-RUN apk add --no-cache postgresql-client msmtp perl wget procps shadow libzip libpng libjpeg-turbo libwebp freetype icu postgresql-dev
+RUN apk update \
+    && apk upgrade \
+    && apk add --no-cache \
+    msmtp \
+    perl \
+    wget \
+    procps \
+    shadow \
+    libzip-dev \
+    libpng-dev \
+    libxml2-dev \
+    libjpeg-turbo-dev \
+    libwebp-dev \
+    libmcrypt-dev \
+    freetype-dev \
+    icu-dev \
+    postgresql-client \
+    postgresql-dev
 
-RUN apk add --no-cache --virtual build-essentials \
-    icu-dev icu-libs zlib-dev g++ make automake autoconf libzip-dev \
-    libpng-dev libwebp-dev libjpeg-turbo-dev freetype-dev && \
-    docker-php-ext-configure gd --enable-gd --with-freetype --with-jpeg --with-webp && \
-    docker-php-ext-install gd && \
-    docker-php-ext-install pdo_pgsql && \
-    docker-php-ext-install intl && \
-    docker-php-ext-install bcmath && \
-    docker-php-ext-install opcache && \
-    docker-php-ext-install exif && \
-    docker-php-ext-install zip && \
-    apk del build-essentials && rm -rf /usr/src/php*
+# Install development packages
+RUN apk add --no-cache --virtual .build-deps $PHPIZE_DEPS \
+    && pecl install redis mongodb \
+    && docker-php-ext-enable redis mongodb \
+    && docker-php-ext-install pdo_pgsql intl bcmath opcache exif zip gd \
+    && docker-php-ext-configure gd --enable-gd --with-freetype --with-jpeg --with-webp \
+    && apk del .build-deps
 
-RUN apk add --no-cache pcre-dev $PHPIZE_DEPS \
-    && pecl install redis \
-    && docker-php-ext-enable redis.so
+# Cleanup
+RUN rm -rf /var/cache/apk/*
 
 COPY --from=composer /usr/bin/composer /usr/bin/composer
 
