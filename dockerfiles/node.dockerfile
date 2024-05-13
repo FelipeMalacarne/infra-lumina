@@ -8,6 +8,4 @@ RUN ["npm", "install"]
 
 COPY front-lumina/ .
 
-CMD ["npm", "run", "dev"]
-
-EXPOSE 3000
+# CMD ["npm", "run", "dev"]

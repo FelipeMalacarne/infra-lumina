@@ -3,6 +3,116 @@ version: "3.9"
 name: lumina
 
 services:
+  # ################################################################################
+  # APP
+  # ################################################################################
+  node:
+    build:
+      context: ..
+      dockerfile: infra-lumina/dockerfiles/node.dockerfile
+    working_dir: /app
+    # volumes:
+    #   - ../front-lumina/:/app
+    ports:
+      - 3000:3000
+
+  # ################################################################################
+  # DATABASES
+  # ################################################################################
+  postgres:
+    image: "postgres:16"
+    ports:
+      - "5432:5432"
+    volumes:
+      - "./db-data/postgres:/var/lib/postgresql/data"
+    environment:
+      PGPASSWORD: ${DB_PASSWORD:-password}
+      POSTGRES_DB: ${DB_DATABASE:-lumina}
+      POSTGRES_USER: ${DB_USERNAME:-admin}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-password}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $DB_USERNAME -d $DB_DATABASE"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:alpine
+    restart: unless-stopped
+    ports:
+      - 6379:6379
+    command: redis-server --appendonly yes --replica-read-only no
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  mongodb:
+    image: mongo:latest
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_DATABASE: ${MONGO_DATABASE:-lumina}
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USERNAME:-admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-password}
+    volumes:
+      - ./db-data/mongo/:/data/db
+    healthcheck:
+      test: echo '${MONGO_DATABASE:-lumina}.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+
+  # ################################################################################
+  # API
+  # ################################################################################
+  composer:
+    build:
+      context: ..
+      dockerfile: infra-lumina/dockerfiles/php.dockerfile
+    working_dir: /var/www/html
+    volumes:
+      - ../back-lumina:/var/www/html
+    entrypoint: ["composer", "install"]
+  
+  php:
+    build:
+      context: ..
+      dockerfile: infra-lumina/dockerfiles/php.dockerfile
+    volumes:
+      - ../back-lumina/:/var/www/html:delegated
+    working_dir: /var/www/html
+
+  migrations:
+    extends: php
+    entrypoint: ["php", "artisan", "migrate"]
+    depends_on:
+      composer:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+
+  mailpit:
+    image: "axllent/mailpit:latest"
+    ports:
+      - "${FORWARD_MAILPIT_PORT:-1025}:1025"
+      - "${FORWARD_MAILPIT_DASHBOARD_PORT:-8025}:8025"
+    depends_on:
+      - php
+
+  scheduler:
+    extends: php
+    entrypoint: ["php", "artisan", "schedule:work"]
+    depends_on:
+      migrations:
+        condition: service_completed_successfully
+
   server:
     build:
       context: ..
@@ -15,79 +125,3 @@ services:
     depends_on:
       - php
     restart: unless-stopped
-
-  postgres:
-    image: "postgres:16"
-    ports:
-      - "5432:5432"
-    volumes:
-      - "./db-data/postgres:/var/lib/postgresql/data"
-    environment:
-      PGPASSWORD: ${DB_PASSWORD:-password}
-      POSTGRES_DB: ${DB_DATABASE:-lumina}
-      POSTGRES_USER: ${DB_USERNAME:-admin}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-password}
-
-  redis:
-    image: redis:alpine
-    restart: unless-stopped
-    ports:
-      - 6379:6379
-    command: redis-server --appendonly yes --replica-read-only no
-
-  mailpit:
-    image: "axllent/mailpit:latest"
-    ports:
-      - "${FORWARD_MAILPIT_PORT:-1025}:1025"
-      - "${FORWARD_MAILPIT_DASHBOARD_PORT:-8025}:8025"
-
-  mongodb:
-    image: mongo:latest
-    ports:
-      - "27017:27017"
-    environment:
-      MONGO_INITDB_DATABASE: ${MONGO_DATABASE:-lumina}
-      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USERNAME:-admin}
-      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-password}
-    volumes:
-      - ./db-data/mongo/:/data/db
-
-  php:
-    build:
-      context: ..
-      dockerfile: infra-lumina/dockerfiles/php.dockerfile
-    volumes:
-      - ../back-lumina/:/var/www/html:delegated
-    working_dir: /var/www/html
-    depends_on:
-      - redis
-      - postgres
-      - mailpit
-      - mongodb
-
-  node:
-    build:
-      context: ..
-      dockerfile: infra-lumina/dockerfiles/node.dockerfile
-    working_dir: /app
-    volumes:
-      - ../front-lumina/:/app
-    ports:
-      - 3000:3000
-    depends_on:
-      - server
-
-  scheduler:
-    extends: php
-    entrypoint: ["php", "artisan", "schedule:work"]
-
-  migrations:
-    extends: php
-    entrypoint: ["php", "artisan", "migrate"]
-
-  composer:
-    image: composer
-    working_dir: /var/www/html
-    volumes:
-      - ../back-lumina:/var/www/html
-    entrypoint: ["composer", "update"]
