@@ -1,3 +1,4 @@
+# i deprecated this
 FROM node:20.12.2-alpine
 
 WORKDIR /app
@@ -9,5 +10,3 @@ RUN ["npm", "install"]
 COPY front-lumina/ .
 
 CMD ["npm", "run", "dev"]
-
-EXPOSE 3000
