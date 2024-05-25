@@ -1,23 +1,30 @@
-version: "3.9"
+name: lumina-deploy
 
-name: lumina
+x-node-image: &node-image
+  image: node:20.12.2-alpine
+  working_dir: /app
+  volumes:
+    - ../../front-lumina:/app
+
+x-php-image: &php-image
+  build:
+    context: ../..
+    dockerfile: infra-lumina/dockerfiles/php.dockerfile
+  volumes:
+    - ../../back-lumina/:/var/www/html
+  working_dir: /var/www/html
 
 services:
+
   # ################################################################################
   # APP
   # ################################################################################
   node-install:
-    image: node:20.12.2-alpine
-    working_dir: /app
-    volumes:
-      - ../front-lumina:/app
+    <<: *node-image
     entrypoint: ["npm", "install"]
 
   node-build:
-    image: node:20.12.2-alpine
-    working_dir: /app
-    volumes:
-      - ../front-lumina:/app
+    <<: *node-image
     depends_on:
       node-install:
         condition: service_completed_successfully
@@ -25,13 +32,13 @@ services:
 
   server-front:
     build:
-      context: ..
-      dockerfile: infra-lumina/dockerfiles/nginx.dockerfile
+      context: ../..
+      dockerfile: infra-lumina/dockerfiles/front.nginx.dockerfile
     ports:
-      - 3000:80
+      - ${APP_FRONTEND_PORT:-3000}:80
     volumes:
-      - ../front-lumina:/var/www/html
-      - ./nginx/front.conf:/etc/nginx/conf.d/default.conf:ro
+      - ../../front-lumina/out:/var/www/html
+      - ../nginx/front.conf:/etc/nginx/conf.d/default.conf
     depends_on:
       node-build:
         condition: service_completed_successfully
@@ -89,25 +96,16 @@ services:
   # ################################################################################
   # API
   # ################################################################################
-  composer:
-    build:
-      context: ..
-      dockerfile: infra-lumina/dockerfiles/php.dockerfile
-    working_dir: /var/www/html
-    volumes:
-      - ../back-lumina:/var/www/html
-    entrypoint: ["composer", "install"]
   
   php:
-    build:
-      context: ..
-      dockerfile: infra-lumina/dockerfiles/php.dockerfile
-    volumes:
-      - ../back-lumina/:/var/www/html:delegated
-    working_dir: /var/www/html
+    <<: *php-image
+
+  composer:
+    <<: *php-image
+    entrypoint: ["composer", "install"]
 
   migrations:
-    extends: php
+    <<: *php-image
     entrypoint: ["php", "artisan", "migrate"]
     depends_on:
       composer:
@@ -128,7 +126,7 @@ services:
       - php
 
   scheduler:
-    extends: php
+    <<: *php-image
     entrypoint: ["php", "artisan", "schedule:work"]
     depends_on:
       migrations:
@@ -136,13 +134,13 @@ services:
 
   server-back:
     build:
-      context: ..
-      dockerfile: infra-lumina/dockerfiles/nginx.dockerfile
+      context: ../..
+      dockerfile: infra-lumina/dockerfiles/back.nginx.dockerfile
     ports:
-      - 8000:80
+      - ${APP_PORT:-11527}:80
     volumes:
-      - ../back-lumina:/var/www/html
-      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - ../../back-lumina:/var/www/html
+      - ../nginx/default.conf:/etc/nginx/conf.d/default.conf
     depends_on:
       - php
     restart: unless-stopped
