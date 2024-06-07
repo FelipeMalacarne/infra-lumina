@@ -1,4 +1,6 @@
 .DS_Store
-db-data/*
-.env
+db-data
+deploy/db-data
+dev/db-data
+*.env
 
